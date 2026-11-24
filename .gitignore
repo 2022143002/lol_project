@@ -21,3 +21,6 @@ step2_model.py
 .idea/
 __pycache__/
 *.pyc
+
+# ---- 제출용 파일 (GitHub에는 올리지 않음) ----
+제출/

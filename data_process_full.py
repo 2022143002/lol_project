@@ -86,7 +86,7 @@ def get_default_match_data(match, timeline, challengers):
 #   TOP    : 미니언, 가한 피해, 받은 피해, 솔로킬, 데스
 #   JUNGLE : 정글 몬스터, 에픽 몬스터, 데스, 와드 설치, 가한 피해
 #   MIDDLE : 미니언, 가한 피해, 받은 피해, 데스, 방패 파괴, 로밍 시간
-#   BOTTOM : ADC 가한 피해, 듀오 킬관여, 듀오 데스, 듀오 와드 제거, 방패 파괴
+#   BOTTOM : ADC 가한 피해, 듀오 킬관여, 듀오 데스, 방패 파괴
 # =====================================================================
 
 EPIC_MONSTERS = ["DRAGON", "RIFTHERALD", "HORDE", "BARON_NASHOR", "ATAKHAN"]
@@ -262,12 +262,13 @@ def get_bottom_feature(match, timeline, data):
     # 1. ADC 가한 피해 격차 : ADC 의 totalDamageDoneToChampions (누적)
     # 2. 듀오 킬관여 격차   : 듀오 중 한 명이라도 킬/어시스트로 참여한 처치 수 (이벤트 누적)
     # 3. 듀오 데스 격차     : 듀오의 데스 합 (이벤트 누적)
-    # 4. 듀오 와드 제거 격차 : WARD_KILL 의 killerId (이벤트 누적)
-    # 5. 방패 파괴 격차     : TURRET_PLATE_DESTROYED 중 BOT_LANE (팀 기준, 이벤트 누적)
+    # 4. 방패 파괴 격차     : TURRET_PLATE_DESTROYED 중 BOT_LANE (팀 기준, 이벤트 누적)
+    # (와드 제거는 피처에서 뺐다. 데이터를 확인해 보니 와드를 깨면 minionsKilled(CS)가 1 오른다.
+    #  즉 와드 제거는 이미 타겟인 '미니언 격차' 안에 들어 있으므로, 피처로 쓰면 정답을 베끼는 셈이 된다.)
     adcDmgB, adcDmgR, takedownB, takedownR, deathB, deathR = [], [], [], [], [], []
-    wardKillB, wardKillR, plateB, plateR = [], [], [], []
+    plateB, plateR = [], []
     takedownBlue, takedownRed, deathBlue, deathRed = 0, 0, 0, 0
-    wardKillBlue, wardKillRed, plateBlue, plateRed = 0, 0, 0, 0
+    plateBlue, plateRed = 0, 0
 
     blueAdc = data["BOTTOM"]["blue"]["participantId"]["ADC"]
     redAdc = data["BOTTOM"]["red"]["participantId"]["ADC"]
@@ -290,11 +291,6 @@ def get_bottom_feature(match, timeline, data):
                     deathBlue += 1
                 elif event["victimId"] in redPids:
                     deathRed += 1
-            elif event["type"] == "WARD_KILL":
-                if event["killerId"] in bluePids:
-                    wardKillBlue += 1
-                elif event["killerId"] in redPids:
-                    wardKillRed += 1
             elif event["type"] == "TURRET_PLATE_DESTROYED" and event.get("laneType") == "BOT_LANE":
                 if event["teamId"] == 200:
                     plateBlue += 1
@@ -302,15 +298,14 @@ def get_bottom_feature(match, timeline, data):
                     plateRed += 1
         diff_pair(takedownBlue, takedownRed, takedownB, takedownR)
         diff_pair(deathBlue, deathRed, deathB, deathR)
-        diff_pair(wardKillBlue, wardKillRed, wardKillB, wardKillR)
         diff_pair(plateBlue, plateRed, plateB, plateR)
 
     data["BOTTOM"]["blue"]["feature"].update({
         "adcDmgDoneDiff": adcDmgB, "duoTakedownDiff": takedownB, "duoDeathDiff": deathB,
-        "duoWardKillDiff": wardKillB, "plateDiff": plateB})
+        "plateDiff": plateB})
     data["BOTTOM"]["red"]["feature"].update({
         "adcDmgDoneDiff": adcDmgR, "duoTakedownDiff": takedownR, "duoDeathDiff": deathR,
-        "duoWardKillDiff": wardKillR, "plateDiff": plateR})
+        "plateDiff": plateR})
 
 
 # =====================================================================
@@ -411,8 +406,9 @@ def get_middle_target(match, timeline, data):
 
 
 def get_bottom_target(match, timeline, data):
-    # ADC + SPT 듀오 합산
+    # ADC + SPT 듀오 합산 (원딜만이 아니라 서포터의 값도 함께 더한다)
     # 1. 미니언 격차 : minionsKilled (누적)
+    #    - 서포터가 상대 와드를 깨면 minionsKilled 가 1 오르므로, 서포터의 시야 싸움도 여기에 포함된다.
     # 2. 골드 격차   : totalGold (누적)
     # (와드 설치 격차는 단독 승패 예측 정확도가 57.4% 로 낮아 결합 타겟의 정확도를 떨어뜨리므로 제외)
     minionDiffBlue, minionDiffRed = [], []
